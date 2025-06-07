@@ -25,32 +25,12 @@ HC-SR04 Sensor     Arduino
 └─────────────┘    └─────────────┘
 ```
 
-### Wiring Diagram
-
-```
-Arduino Uno                    HC-SR04 Sensor
-     ┌─────────────────┐          ┌───────────┐
-     │                 │          │  ┌─────┐  │
-     │    Digital 2    │◀─────────┤  │Trig │  │
-     │                 │          │  └─────┘  │
-     │    Digital 10   │◀─────────┤  ┌─────┐  │
-     │                 │          │  │Echo │  │
-     │                 │          │  └─────┘  │
-     │        5V       │◀─────────┤  ┌─────┐  │
-     │                 │          │  │ VCC │  │
-     │       GND       │◀─────────┤  └─────┘  │
-     │                 │          │  ┌─────┐  │
-     │                 │          │  │ GND │  │
-     └─────────────────┘          │  └─────┘  │
-                                  └───────────┘
-```
-
 ## Software Setup
 
 ### Requirements
 
 1. **Arduino IDE** - to upload the sensor code
-2. **Python 3.7+** - to run the MIDI trigger script
+2. **Python 3.12+** - to run the MIDI trigger script
 3. **Reaper DAW** - to receive MIDI and play audio
 
 ### Installation
