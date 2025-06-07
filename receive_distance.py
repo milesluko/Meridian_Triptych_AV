@@ -3,11 +3,22 @@ import serial
 import time
 import random
 import threading
+import os
+import glob
+import re
+from pathlib import Path
 
 try:
     import mido
 except ImportError:
     print("Error: mido not installed. Run: pip install mido")
+    exit(1)
+
+try:
+    import mutagen
+    from mutagen import File as MutagenFile
+except ImportError:
+    print("Error: mutagen not installed. Run: pip install mutagen")
     exit(1)
 
 BAUD_RATE = 9600
@@ -17,6 +28,7 @@ NUM_TRACKS = 8
 DETECTION_COOLDOWN = 5
 TRACK_DELAY = 300  # 5 minutes in seconds
 MAX_QUEUED_TRACKS = 2
+AUDIO_FOLDER = "audio"
 
 def find_arduino_port():
     ports = serial.tools.list_ports.comports()
@@ -36,6 +48,36 @@ def find_arduino_port():
             return port.device
     
     return None
+
+def create_audio_dictionary(audio_folder=AUDIO_FOLDER):
+    audio_dict = {}
+    audio_extensions = ('.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma')
+    
+    if not os.path.exists(audio_folder):
+        print(f"Warning: Audio folder '{audio_folder}' not found")
+        return audio_dict
+    
+    audio_files = []
+    for ext in audio_extensions:
+        audio_files.extend(glob.glob(os.path.join(audio_folder, f"*{ext}")))
+        audio_files.extend(glob.glob(os.path.join(audio_folder, f"*{ext.upper()}")))
+    
+    print(f"Found {len(audio_files)} audio files in '{audio_folder}'")
+    
+    for file_path in audio_files:
+        try:
+            audio_file = MutagenFile(file_path)
+            if audio_file is not None and hasattr(audio_file, 'info'):
+                length = audio_file.info.length
+                filename = os.path.basename(file_path)
+                audio_dict[filename] = length
+                print(f"  {filename}: {length:.2f} seconds")
+            else:
+                print(f"  Warning: Could not read audio info for {os.path.basename(file_path)}")
+        except Exception as e:
+            print(f"  Error reading {os.path.basename(file_path)}: {e}")
+    
+    return audio_dict
 
 def find_midi_port():
     try:
@@ -66,12 +108,18 @@ def find_midi_port():
     return selected_port
 
 class MIDITrackTrigger:
-    def __init__(self, midi_channel=0, num_tracks=8):
+    def __init__(self, midi_channel=0, num_tracks=8, audio_dict=None):
         self.midi_channel = midi_channel
         self.num_tracks = num_tracks
         self.midi_port = None
         self.queued_count = 0
+        self.playing_count = 0
         self.lock = threading.Lock()
+        self.audio_dict = audio_dict or {}
+        self.note_to_file_map = {}
+        self.playing_tracks = {}
+        
+        self._create_note_mapping()
         
         port_name = find_midi_port()
         if port_name:
@@ -83,9 +131,46 @@ class MIDITrackTrigger:
         else:
             print("No MIDI port available")
     
+    def _extract_note_from_filename(self, filename):
+        name_without_ext = os.path.splitext(filename)[0]
+        match = re.search(r'(\d+)', name_without_ext)
+        if match:
+            note_num = int(match.group(1))
+            if 0 <= note_num <= 127:
+                return note_num
+        return None
+    
+    def _create_note_mapping(self):
+        if not self.audio_dict:
+            print("Warning: No audio files found for MIDI mapping")
+            return
+        
+        mapped_files = []
+        unmapped_files = []
+        
+        for filename in self.audio_dict.keys():
+            note = self._extract_note_from_filename(filename)
+            if note is not None:
+                self.note_to_file_map[note] = filename
+                mapped_files.append((note, filename))
+                print(f"MIDI Note {note} -> {filename} ({self.audio_dict[filename]:.2f}s)")
+            else:
+                unmapped_files.append(filename)
+                print(f"Warning: Could not extract MIDI note from filename: {filename}")
+        
+        if mapped_files:
+            print(f"Successfully mapped {len(mapped_files)} audio files to MIDI notes")
+        
+        if unmapped_files:
+            print(f"Warning: {len(unmapped_files)} files could not be mapped (no valid note number in filename)")
+    
     def queue_random_track(self):
         if not self.midi_port:
             print("No MIDI port available")
+            return
+        
+        if not self.note_to_file_map:
+            print("No mapped audio files available for playback")
             return
         
         with self.lock:
@@ -94,8 +179,10 @@ class MIDITrackTrigger:
                 return
             
             self.queued_count += 1
-            track_note = 60 + random.randint(0, self.num_tracks - 1)
-            print(f"Queued track {track_note - 59} (Note {track_note}) - will play in 5 minutes ({self.queued_count} in queue)")
+            available_notes = list(self.note_to_file_map.keys())
+            track_note = random.choice(available_notes)
+            filename = self.note_to_file_map[track_note]
+            print(f"Queued {filename} (Note {track_note}) - will play in 5 minutes ({self.queued_count} in queue)")
             
             # Schedule track to play after delay
             timer = threading.Timer(TRACK_DELAY, self._trigger_track, args=[track_note])
@@ -106,9 +193,15 @@ class MIDITrackTrigger:
             print("No MIDI port available")
             return
         
+        filename = self.note_to_file_map.get(track_note, "Unknown")
+        duration = self.audio_dict.get(filename, 0)
+        
         with self.lock:
             self.queued_count -= 1
-            print(f"Playing scheduled track {track_note - 59} (Note {track_note}) - {self.queued_count} remaining in queue")
+            self.playing_count += 1
+            self.playing_tracks[track_note] = {"filename": filename, "start_time": time.time()}
+            print(f"Playing scheduled track {track_note - 59} (Note {track_note}) - {filename}")
+            print(f"Queue: {self.queued_count} queued, {self.playing_count} playing")
         
         try:
             note_on = mido.Message('note_on', channel=self.midi_channel, note=track_note, velocity=127)
@@ -119,10 +212,28 @@ class MIDITrackTrigger:
             note_off = mido.Message('note_off', channel=self.midi_channel, note=track_note, velocity=0)
             self.midi_port.send(note_off)
             
-            print(f"MIDI trigger sent for track {track_note - 59}")
+            print(f"MIDI trigger sent for track {track_note - 59} - will finish in {duration:.2f}s")
+            
+            if duration > 0:
+                cleanup_timer = threading.Timer(duration, self._track_finished, args=[track_note])
+                cleanup_timer.start()
             
         except Exception as e:
             print(f"MIDI error: {e}")
+            with self.lock:
+                self.playing_count -= 1
+                if track_note in self.playing_tracks:
+                    del self.playing_tracks[track_note]
+    
+    def _track_finished(self, track_note):
+        with self.lock:
+            if track_note in self.playing_tracks:
+                track_info = self.playing_tracks[track_note]
+                elapsed = time.time() - track_info["start_time"]
+                print(f"Track {track_note - 59} ({track_info['filename']}) finished after {elapsed:.2f}s")
+                del self.playing_tracks[track_note]
+                self.playing_count -= 1
+                print(f"Queue status: {self.queued_count} queued, {self.playing_count} playing")
     
     def close(self):
         if self.midi_port:
@@ -131,7 +242,11 @@ class MIDITrackTrigger:
 
 def main():
     try:
-        midi_trigger = MIDITrackTrigger(MIDI_CHANNEL, NUM_TRACKS)
+        print("Loading audio file dictionary...")
+        audio_dict = create_audio_dictionary()
+        print(f"Audio dictionary created with {len(audio_dict)} files\n")
+        
+        midi_trigger = MIDITrackTrigger(MIDI_CHANNEL, NUM_TRACKS, audio_dict)
         
         serial_port = find_arduino_port()
         if not serial_port:
