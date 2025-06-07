@@ -183,7 +183,7 @@ class MIDITrackTrigger:
             available_notes = list(self.note_to_file_map.keys())
             track_note = random.choice(available_notes)
             filename = self.note_to_file_map[track_note]
-            print(f"Queued {filename} (Note {track_note}) - will play in 5 minutes ({self.queued_count} in queue)")
+            print(f"Queued {filename} (Note {track_note}) - will play in ({TRACK_DELAY/60}) minutes ({self.queued_count} in queue)")
             
             # Schedule track to play after delay
             timer = threading.Timer(TRACK_DELAY, self._trigger_track, args=[track_note])
@@ -206,7 +206,7 @@ class MIDITrackTrigger:
             self.queued_count -= 1
             self.playing_count += 1
             self.playing_tracks[track_note] = {"filename": filename, "start_time": time.time()}
-            print(f"Playing scheduled track {track_note - 59} (Note {track_note}) - {filename}")
+            print(f"Playing scheduled track {track_note} (Note {track_note}) - {filename}")
             print(f"Queue: {self.queued_count} queued, {self.playing_count} playing")
         
         try:
@@ -218,7 +218,7 @@ class MIDITrackTrigger:
             note_off = mido.Message('note_off', channel=self.midi_channel, note=track_note, velocity=0)
             self.midi_port.send(note_off)
             
-            print(f"MIDI trigger sent for track {track_note - 59} - will finish in {duration:.2f}s")
+            print(f"MIDI trigger sent for track {track_note} - will finish in {duration:.2f}s")
             
             if duration > 0:
                 cleanup_timer = threading.Timer(duration, self._track_finished, args=[track_note])
