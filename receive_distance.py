@@ -281,10 +281,7 @@ def main():
         while True:
             if arduino.in_waiting > 0:
                 data = arduino.readline().decode('utf-8').strip()
-                if data:
-                    print(data)
-                    
-                    if data.startswith("Distance:"):
+                if data and data.startswith("Distance:"):
                         try:
                             distance_str = data.split(":")[1].strip().replace(" cm", "")
                             distance = float(distance_str)
