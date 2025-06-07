@@ -118,6 +118,7 @@ class MIDITrackTrigger:
         self.audio_dict = audio_dict or {}
         self.note_to_file_map = {}
         self.playing_tracks = {}
+        self.active_timers = []
         
         self._create_note_mapping()
         
@@ -174,7 +175,7 @@ class MIDITrackTrigger:
             return
         
         with self.lock:
-            if self.queued_count > MAX_QUEUED_TRACKS:
+            if self.queued_count >= MAX_QUEUED_TRACKS:
                 print(f"Queue full ({self.queued_count} tracks queued). Skipping new track.")
                 return
             
@@ -186,11 +187,16 @@ class MIDITrackTrigger:
             
             # Schedule track to play after delay
             timer = threading.Timer(TRACK_DELAY, self._trigger_track, args=[track_note])
+            self.active_timers.append(timer)
             timer.start()
+            print(f"Timer started for track {track_note}, will trigger in {TRACK_DELAY} seconds")
     
     def _trigger_track(self, track_note):
+        print(f"_trigger_track called for note {track_note}")
         if not self.midi_port:
             print("No MIDI port available")
+            with self.lock:
+                self.queued_count -= 1
             return
         
         filename = self.note_to_file_map.get(track_note, "Unknown")
@@ -236,6 +242,14 @@ class MIDITrackTrigger:
                 print(f"Queue status: {self.queued_count} queued, {self.playing_count} playing")
     
     def close(self):
+        # Cancel all active timers
+        with self.lock:
+            for timer in self.active_timers:
+                if timer.is_alive():
+                    timer.cancel()
+                    print(f"Cancelled active timer")
+            self.active_timers.clear()
+        
         if self.midi_port:
             self.midi_port.close()
             print("MIDI port closed")
