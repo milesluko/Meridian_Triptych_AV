@@ -29,6 +29,7 @@ DETECTION_COOLDOWN = 5
 TRACK_DELAY = 300  # 5 minutes in seconds
 MAX_QUEUED_TRACKS = 2
 AUDIO_FOLDER = "audio"
+EMPTY_QUEUE_TIMEOUT = 1200  # 20 minutes in seconds
 
 def find_arduino_port():
     ports = serial.tools.list_ports.comports()
@@ -126,6 +127,8 @@ class MIDITrackTrigger:
         self.note_to_file_map = {}
         self.playing_tracks = {}
         self.active_timers = []
+        self.last_queue_activity = time.time()
+        self.empty_queue_timer = None
         
         self._create_note_mapping()
         
@@ -138,6 +141,9 @@ class MIDITrackTrigger:
                 print(f"Error opening MIDI port {port_name}: {e}")
         else:
             print("No MIDI port available")
+        
+        # Start empty queue timer since queue starts empty
+        self._reset_empty_queue_timer()
     
     def _extract_note_from_filename(self, filename):
         name_without_ext = os.path.splitext(filename)[0]
@@ -197,6 +203,9 @@ class MIDITrackTrigger:
             self.active_timers.append(timer)
             timer.start()
             print(f"Timer started for track {track_note}, will trigger in {TRACK_DELAY} seconds")
+            
+            self.last_queue_activity = time.time()
+            self._reset_empty_queue_timer()
     
     def _trigger_track(self, track_note):
         print(f"_trigger_track called for note {track_note}")
@@ -215,6 +224,9 @@ class MIDITrackTrigger:
             self.playing_tracks[track_note] = {"filename": filename, "start_time": time.time()}
             print(f"Playing scheduled track {track_note} (Note {track_note}) - {filename}")
             print(f"Queue: {self.queued_count} queued, {self.playing_count} playing")
+            
+            if self.queued_count == 0 and self.playing_count == 1:
+                self._reset_empty_queue_timer()
         
         try:
             note_on = mido.Message('note_on', channel=self.midi_channel, note=track_note, velocity=127)
@@ -247,6 +259,26 @@ class MIDITrackTrigger:
                 del self.playing_tracks[track_note]
                 self.playing_count -= 1
                 print(f"Queue status: {self.queued_count} queued, {self.playing_count} playing")
+                
+                if self.queued_count == 0 and self.playing_count == 0:
+                    self._reset_empty_queue_timer()
+    
+    def _reset_empty_queue_timer(self):
+        if self.empty_queue_timer and self.empty_queue_timer.is_alive():
+            self.empty_queue_timer.cancel()
+        
+        if self.queued_count == 0 and self.playing_count == 0:
+            print(f"Queue is empty - setting 20 minute timer for auto-queue")
+            self.empty_queue_timer = threading.Timer(EMPTY_QUEUE_TIMEOUT, self._auto_queue_track)
+            self.empty_queue_timer.start()
+        else:
+            self.empty_queue_timer = None
+    
+    def _auto_queue_track(self):
+        with self.lock:
+            if self.queued_count == 0 and self.playing_count == 0:
+                print("Auto-queuing track after 20 minutes of empty queue")
+                self.queue_random_track()
     
     def close(self):
         # Cancel all active timers
@@ -256,6 +288,10 @@ class MIDITrackTrigger:
                     timer.cancel()
                     print(f"Cancelled active timer")
             self.active_timers.clear()
+            
+            if self.empty_queue_timer and self.empty_queue_timer.is_alive():
+                self.empty_queue_timer.cancel()
+                print("Cancelled empty queue timer")
         
         if self.midi_port:
             self.midi_port.close()
