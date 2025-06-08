@@ -79,7 +79,7 @@ def create_audio_dictionary(audio_folder=AUDIO_FOLDER):
     
     return audio_dict
 
-def find_midi_port():
+def select_midi_port():
     try:
         output_ports = mido.get_output_names()
     except Exception as e:
@@ -92,20 +92,27 @@ def find_midi_port():
         print("Make sure you have MIDI software running (like Reaper) or virtual MIDI ports set up")
         return None
     
-    print("Available MIDI output ports:")
+    print("\nAvailable MIDI output ports:")
+    print("=" * 50)
     for i, port in enumerate(output_ports):
         print(f"  {i}: {port}")
+    print("=" * 50)
     
-    preferred_ports = ['reaper', 'daw', 'virtual', 'midi']
-    
-    for port in output_ports:
-        if any(pref in port.lower() for pref in preferred_ports):
-            print(f"Using MIDI port: {port}")
-            return port
-    
-    selected_port = output_ports[0]
-    print(f"Using first available MIDI port: {selected_port}")
-    return selected_port
+    while True:
+        try:
+            choice = input(f"\nSelect MIDI port (0-{len(output_ports)-1}): ")
+            port_index = int(choice)
+            if 0 <= port_index < len(output_ports):
+                selected_port = output_ports[port_index]
+                print(f"Selected MIDI port: {selected_port}")
+                return selected_port
+            else:
+                print(f"Invalid selection. Please enter a number between 0 and {len(output_ports)-1}")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+        except KeyboardInterrupt:
+            print("\nExiting...")
+            return None
 
 class MIDITrackTrigger:
     def __init__(self, midi_channel=0, num_tracks=8, audio_dict=None):
@@ -122,7 +129,7 @@ class MIDITrackTrigger:
         
         self._create_note_mapping()
         
-        port_name = find_midi_port()
+        port_name = select_midi_port()
         if port_name:
             try:
                 self.midi_port = mido.open_output(port_name)
