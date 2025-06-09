@@ -24,12 +24,11 @@ except ImportError:
 BAUD_RATE = 9600
 PROXIMITY_THRESHOLD = 100
 MIDI_CHANNEL = 0
-NUM_TRACKS = 8
+NUM_TRACKS = 4
 DETECTION_COOLDOWN = 5
 TRACK_DELAY = 10  # 5 minutes in seconds
-MAX_QUEUED_TRACKS = 2
+MAX_QUEUED_TRACKS = 10
 BASE_TRACK_DELAY = 300  # 5 minutes in seconds for first track
-MAX_QUEUED_TRACKS = 4
 AUDIO_FOLDER = "audio"
 EMPTY_QUEUE_TIMEOUT = 1200  # 20 minutes in seconds
 
@@ -198,8 +197,14 @@ class MIDITrackTrigger:
             self.queued_count += 1
             self.queue_position += 1
             
-            # Calculate progressive delay: 5min, 6min, 7min, 8min
-            track_delay = BASE_TRACK_DELAY + ((self.queue_position - 1) * 60)  # Add 1 minute per position
+            # Calculate progressive delay with random first track offset
+            if self.queue_position == 1:
+                # First track: random between 2-5 minutes (120-300 seconds)
+                base_delay = random.randint(120, 300)
+            else:
+                base_delay = BASE_TRACK_DELAY
+            
+            track_delay = base_delay + ((self.queue_position - 1) * 60)  # Add 1 minute per position
             
             available_notes = list(self.note_to_file_map.keys())
             track_note = random.choice(available_notes)
