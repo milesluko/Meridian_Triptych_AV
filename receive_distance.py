@@ -26,8 +26,8 @@ PROXIMITY_THRESHOLD = 100
 MIDI_CHANNEL = 0
 NUM_TRACKS = 8
 DETECTION_COOLDOWN = 5
-TRACK_DELAY = 300  # 5 minutes in seconds
-MAX_QUEUED_TRACKS = 2
+BASE_TRACK_DELAY = 300  # 5 minutes in seconds for first track
+MAX_QUEUED_TRACKS = 4
 AUDIO_FOLDER = "audio"
 EMPTY_QUEUE_TIMEOUT = 1200  # 20 minutes in seconds
 
@@ -129,6 +129,7 @@ class MIDITrackTrigger:
         self.active_timers = []
         self.last_queue_activity = time.time()
         self.empty_queue_timer = None
+        self.queue_position = 0
         
         self._create_note_mapping()
         
@@ -193,16 +194,21 @@ class MIDITrackTrigger:
                 return
             
             self.queued_count += 1
+            self.queue_position += 1
+            
+            # Calculate progressive delay: 5min, 6min, 7min, 8min
+            track_delay = BASE_TRACK_DELAY + ((self.queue_position - 1) * 60)  # Add 1 minute per position
+            
             available_notes = list(self.note_to_file_map.keys())
             track_note = random.choice(available_notes)
             filename = self.note_to_file_map[track_note]
-            print(f"Queued {filename} (Note {track_note}) - will play in ({TRACK_DELAY/60}) minutes ({self.queued_count} in queue)")
+            print(f"Queued {filename} (Note {track_note}) - position {self.queue_position}, will play in {track_delay/60:.1f} minutes ({self.queued_count} in queue)")
             
             # Schedule track to play after delay
-            timer = threading.Timer(TRACK_DELAY, self._trigger_track, args=[track_note])
+            timer = threading.Timer(track_delay, self._trigger_track, args=[track_note])
             self.active_timers.append(timer)
             timer.start()
-            print(f"Timer started for track {track_note}, will trigger in {TRACK_DELAY} seconds")
+            print(f"Timer started for track {track_note}, will trigger in {track_delay} seconds")
             
             self.last_queue_activity = time.time()
             self._reset_empty_queue_timer()
@@ -261,6 +267,7 @@ class MIDITrackTrigger:
                 print(f"Queue status: {self.queued_count} queued, {self.playing_count} playing")
                 
                 if self.queued_count == 0 and self.playing_count == 0:
+                    self.queue_position = 0  # Reset position counter when queue is empty
                     self._reset_empty_queue_timer()
     
     def _reset_empty_queue_timer(self):
