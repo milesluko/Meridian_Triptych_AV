@@ -116,9 +116,8 @@ def select_midi_port():
             return None
 
 class MIDITrackTrigger:
-    def __init__(self, midi_channel=0, num_tracks=8, audio_dict=None):
+    def __init__(self, midi_channel=0, audio_dict=None):
         self.midi_channel = midi_channel
-        self.num_tracks = num_tracks
         self.midi_port = None
         self.queued_count = 0
         self.playing_count = 0
@@ -316,7 +315,7 @@ def main():
         audio_dict = create_audio_dictionary()
         print(f"Audio dictionary created with {len(audio_dict)} files\n")
         
-        midi_trigger = MIDITrackTrigger(MIDI_CHANNEL, NUM_TRACKS, audio_dict)
+        midi_trigger = MIDITrackTrigger(MIDI_CHANNEL, audio_dict)
         
         serial_port = find_arduino_port()
         if not serial_port:
