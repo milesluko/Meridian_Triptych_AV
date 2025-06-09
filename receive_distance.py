@@ -27,7 +27,7 @@ MIDI_CHANNEL = 0
 DETECTION_COOLDOWN = 5
 MAX_QUEUED_TRACKS = 10
 SUBSEQUENT_TRACK_BASE_DELAY = 300  # 5 minutes base delay for tracks 2+
-TRACK_DELAY_INCREMENT = 60  # 1 minute increment between tracks
+TRACK_DELAY_INCREMENT = 30  # 1 minute increment between tracks
 AUDIO_FOLDER = "audio"
 EMPTY_QUEUE_TIMEOUT = 600  # 10 minutes in seconds
 
