@@ -266,7 +266,7 @@ class MIDITrackTrigger:
             if track_note in self.playing_tracks:
                 track_info = self.playing_tracks[track_note]
                 elapsed = time.time() - track_info["start_time"]
-                print(f"Track {track_note - 59} ({track_info['filename']}) finished after {elapsed:.2f}s")
+                print(f"Track {track_note} ({track_info['filename']}) finished after {elapsed:.2f}s")
                 del self.playing_tracks[track_note]
                 self.playing_count -= 1
                 print(f"Queue status: {self.queued_count} queued, {self.playing_count} playing")
