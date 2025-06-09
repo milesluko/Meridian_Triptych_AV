@@ -24,13 +24,12 @@ except ImportError:
 BAUD_RATE = 9600
 PROXIMITY_THRESHOLD = 100
 MIDI_CHANNEL = 0
-NUM_TRACKS = 4
 DETECTION_COOLDOWN = 5
-TRACK_DELAY = 10  # 5 minutes in seconds
 MAX_QUEUED_TRACKS = 10
-BASE_TRACK_DELAY = 300  # 5 minutes in seconds for first track
+SUBSEQUENT_TRACK_BASE_DELAY = 300  # 5 minutes base delay for tracks 2+
+TRACK_DELAY_INCREMENT = 60  # 1 minute increment between tracks
 AUDIO_FOLDER = "audio"
-EMPTY_QUEUE_TIMEOUT = 1200  # 20 minutes in seconds
+EMPTY_QUEUE_TIMEOUT = 600  # 10 minutes in seconds
 
 def find_arduino_port():
     ports = serial.tools.list_ports.comports()
@@ -202,9 +201,9 @@ class MIDITrackTrigger:
                 # First track: random between 2-5 minutes (120-300 seconds)
                 base_delay = random.randint(120, 300)
             else:
-                base_delay = BASE_TRACK_DELAY
+                base_delay = SUBSEQUENT_TRACK_BASE_DELAY
             
-            track_delay = base_delay + ((self.queue_position - 1) * 60)  # Add 1 minute per position
+            track_delay = base_delay + ((self.queue_position - 1) * TRACK_DELAY_INCREMENT)
             
             available_notes = list(self.note_to_file_map.keys())
             track_note = random.choice(available_notes)
