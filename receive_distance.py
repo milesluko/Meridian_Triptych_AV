@@ -198,7 +198,7 @@ class MIDITrackTrigger:
             # Calculate progressive delay with random first track offset
             if self.queue_position == 1:
                 # First track: random between 2-5 minutes (120-300 seconds)
-                base_delay = random.randint(60, 180)
+                base_delay = random.randint(120, 300)
             else:
                 base_delay = SUBSEQUENT_TRACK_BASE_DELAY
             
