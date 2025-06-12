@@ -29,7 +29,7 @@ MAX_QUEUED_TRACKS = 10
 SUBSEQUENT_TRACK_BASE_DELAY = 300  # 5 minutes base delay for tracks 2+
 TRACK_DELAY_INCREMENT = 30  # 1 minute increment between tracks
 AUDIO_FOLDER = "audio"
-EMPTY_QUEUE_TIMEOUT = 600  # 10 minutes in seconds
+EMPTY_QUEUE_TIMEOUT = 300  # 10 minutes in seconds
 
 def find_arduino_port():
     ports = serial.tools.list_ports.comports()
@@ -198,7 +198,7 @@ class MIDITrackTrigger:
             # Calculate progressive delay with random first track offset
             if self.queue_position == 1:
                 # First track: random between 2-5 minutes (120-300 seconds)
-                base_delay = random.randint(20, 50)
+                base_delay = random.randint(30, 80)
             else:
                 base_delay = SUBSEQUENT_TRACK_BASE_DELAY
             
